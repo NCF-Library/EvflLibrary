@@ -5,6 +5,7 @@ namespace BfevLibrary.Core;
 
 public class EntryPoint : IBfevDataBlock
 {
+    public RadixTree<VariableDef>? Parameters { get; set; } = new();
     public List<short> SubFlowEventIndices { get; set; }
     public short EventIndex { get; set; }
 
@@ -17,11 +18,21 @@ public class EntryPoint : IBfevDataBlock
     public IBfevDataBlock Read(BfevReader reader)
     {
         long subFlowEventIndicesPtr = reader.ReadInt64();
-        reader.BaseStream.Position += 8 + 8; // unused (in botw) VariableDef pointers (ulong, ulong)
+        long entrypointVariableDefNamesPtr = reader.ReadInt64();
+        long entrypointVariableDefPtr = reader.ReadInt64();
         ushort subFlowEventIndicesCount = reader.ReadUInt16();
-        reader.BaseStream.Position += 2; // unused (in botw) VariableDef count (ushort)
+        ushort varDefCount= reader.ReadUInt16();
         EventIndex = reader.ReadInt16();
+
         reader.BaseStream.Position += 2; // padding
+
+        if (varDefCount > 0)
+        {
+            var variableDefinitions = new VariableDef[varDefCount];
+            reader.ReadObjectsPtr(variableDefinitions, () => new VariableDef(reader, false), entrypointVariableDefPtr);
+            reader.TemporarySeek(entrypointVariableDefNamesPtr, SeekOrigin.Begin, () => Parameters = new RadixTree<VariableDef>(reader, variableDefinitions));
+        }
+
         SubFlowEventIndices = reader.ReadObjectsPtr(new short[subFlowEventIndicesCount], reader.ReadInt16, subFlowEventIndicesPtr).ToList();
         return this;
     }
